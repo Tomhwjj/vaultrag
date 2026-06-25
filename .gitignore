@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+vectordb/
+models/
+docs/
+graph_cache.json
+*.egg-info/
+dist/

@@ -1,0 +1,20 @@
+[project]
+name = "vaultrag"
+version = "1.0.0"
+description = "Vault-native RAG engine — three-way retrieval fusion (vector + BM25 + graph) for Obsidian vaults"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "chromadb",
+    "sentence-transformers",
+    "jieba",
+    "rank-bm25",
+]
+
+[project.optional-dependencies]
+pdf = ["pdfplumber", "PyMuPDF"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools"
