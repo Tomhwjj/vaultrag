@@ -1,4 +1,4 @@
-# VaultRAG — 三路检索融合 + Claude Code 长久记忆
+# VaultRAG — 三路检索融合 + Claude Code 长久记忆（基于RAG和obsidian知识库，而构建的claude code长久记忆实现框架）
 
 **Vault-native AI memory stack.** Obsidian vault 即知识库和记忆系统 —— 零导入、零同步、零复制。
 
