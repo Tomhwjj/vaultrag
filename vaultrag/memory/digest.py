@@ -1,21 +1,24 @@
 """
-记忆快照写入 — 去重检查 + 模板化写入 + 增量入库。
+记忆快照写入 — BGE 语义去重 + 模板化写入 + 增量入库。
 Claude Code 执行 /digest 时调用。
 """
 import os
 import sys
 import json
 import datetime
-import hashlib
+import numpy as np
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from ..config import VAULT_DIR
-from .load import load as load_all
-
+from config import DOC_DIR as VAULT_DIR, EMBEDDING_MODEL
+from memory_load import load as load_all
 
 MEMORY_DIR = os.path.join(VAULT_DIR, "记忆")
+
+# 懒加载 BGE 模型（首次调用 check_dedup 时初始化）
+_embed_model = None
+
 TEMPLATE = """---
 tags: [{tags}]
 date: {date}
@@ -41,46 +44,67 @@ summary: {summary}
 """
 
 
-def _cosine_sim(text1: str, text2: str) -> float:
-    """简易语义相似度（基于词袋，无需加载 BGE 模型）"""
-    import re
-    words1 = set(re.findall(r'[一-鿿]+|[a-zA-Z]+', text1.lower()))
-    words2 = set(re.findall(r'[一-鿿]+|[a-zA-Z]+', text2.lower()))
-    if not words1 or not words2:
-        return 0.0
-    intersection = words1 & words2
-    return len(intersection) / ((len(words1) * len(words2)) ** 0.5)
+def _get_embed_model():
+    global _embed_model
+    if _embed_model is None:
+        from sentence_transformers import SentenceTransformer
+        _embed_model = SentenceTransformer(EMBEDDING_MODEL)
+    return _embed_model
+
+
+def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
+    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
 def check_dedup(title: str, summary: str, tags: list[str]) -> dict | None:
     """
-    检查是否与已有 #hot-30d 快照重复。
-    返回: None（无重复）或 {"file": "路径", "sim": 0.92}（建议合并）
+    BGE 语义去重检查。
+    对比范围: 近 3 天已写入的 #hot-30d 快照
+    阈值: 余弦相似度 > 0.9 → merge
+    返回: None（无重复）或 {"file": "路径", "sim": 0.95}
     """
+    today = datetime.date.today()
+    cutoff = today - datetime.timedelta(days=3)
     existing = load_all(hot_only=False)
-    best = None
-    best_sim = 0.0
 
+    # 筛选近 3 天
+    recent = []
     for m in existing:
-        sim = _cosine_sim(summary + title, m["summary"] + m["title"])
+        try:
+            d = datetime.date.fromisoformat(m["date"])
+            if d >= cutoff:
+                recent.append(m)
+        except ValueError:
+            continue
+
+    if not recent:
+        return None
+
+    # BGE 编码
+    model = _get_embed_model()
+    query_vec = model.encode([summary + " " + title])
+    doc_texts = [m["summary"] + " " + m["title"] for m in recent]
+    doc_vecs = model.encode(doc_texts)
+
+    # 余弦相似度
+    best_idx = 0
+    best_sim = 0.0
+    for i, dv in enumerate(doc_vecs):
+        sim = _cosine_sim(query_vec[0], dv)
         if sim > best_sim:
             best_sim = sim
-            best = m
+            best_idx = i
 
-    if best_sim > 0.85 and best:
-        return {"file": best["file"], "sim": round(best_sim, 3)}
+    if best_sim > 0.9:
+        return {"file": recent[best_idx]["file"], "sim": round(best_sim, 3)}
     return None
 
 
 def write(title: str, summary: str, tags: list[str],
           conclusion: str = "", decisions: str = "",
           constraints: str = "", issues: str = "") -> str:
-    """
-    写入记忆快照。返回文件路径。
-    """
     os.makedirs(MEMORY_DIR, exist_ok=True)
 
-    # 文件名: YYYY-MM-DD-{tag}-{slug}.md
     date = datetime.date.today().isoformat()
     slug = title.replace(" ", "-").replace("/", "-")[:50]
     main_tag = [t for t in tags if t.startswith("mem-")]
@@ -98,23 +122,18 @@ def write(title: str, summary: str, tags: list[str],
         constraints=constraints or "（无）",
         issues=issues or "（无）",
     )
-
     with open(fpath, "w", encoding="utf-8") as f:
         f.write(content)
 
-    # 增量入库
-    from ..incremental import main as incremental_main
     import subprocess
-    subprocess.run([sys.executable, "-m", "vaultrag.incremental"],
-                   cwd=os.path.dirname(os.path.dirname(__file__)),
+    kb_dir = os.path.dirname(os.path.abspath(__file__))
+    subprocess.run([sys.executable, os.path.join(kb_dir, "incremental_ingest.py")],
                    capture_output=True)
-
     return fpath
 
 
 def merge(existing_file: str, title: str, summary: str, decisions: str = "",
           constraints: str = "", issues: str = ""):
-    """合并到已有快照：新内容替换正文，旧结论移入历史区域"""
     fpath = os.path.join(VAULT_DIR, existing_file)
     if not os.path.exists(fpath):
         return write(title, summary, [], "", decisions, constraints, issues)
@@ -124,7 +143,6 @@ def merge(existing_file: str, title: str, summary: str, decisions: str = "",
 
     date = datetime.date.today().isoformat()
 
-    # 追加历史版本
     history_block = f"""
 
 ## 📜 历史版本
@@ -137,7 +155,6 @@ def merge(existing_file: str, title: str, summary: str, decisions: str = "",
 </details>
 """
 
-    # 重建正文
     tag_match = old[old.find("tags:") + 5: old.find("\n", old.find("tags:"))] if "tags:" in old else "mem-decision, hot-30d"
 
     new_content = TEMPLATE.format(
@@ -155,16 +172,15 @@ def merge(existing_file: str, title: str, summary: str, decisions: str = "",
         f.write(new_content)
 
     import subprocess
-    subprocess.run([sys.executable, "-m", "vaultrag.incremental"],
-                   cwd=os.path.dirname(os.path.dirname(__file__)),
+    kb_dir = os.path.dirname(os.path.abspath(__file__))
+    subprocess.run([sys.executable, os.path.join(kb_dir, "incremental_ingest.py")],
                    capture_output=True)
-
     return fpath
 
 
 def main():
     import argparse
-    p = argparse.ArgumentParser(description="记忆快照写入")
+    p = argparse.ArgumentParser(description="记忆快照写入 — BGE语义去重")
     p.add_argument("--check", action="store_true", help="去重检查")
     p.add_argument("--write", action="store_true", help="写入新快照")
     p.add_argument("--merge", type=str, help="合并到已有文件")
