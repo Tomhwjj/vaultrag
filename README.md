@@ -1,8 +1,10 @@
 # VaultRAG
 
-**Vault-native RAG engine with three-way retrieval fusion.**
+**Vault-native AI memory stack — RAG + persistent memory for Claude Code.**
 
-Your Obsidian vault **is** the knowledge base. No import, no sync, no duplication.
+Your Obsidian vault **is** the knowledge base AND the memory system. No import, no sync, no duplication.
+
+Three-way retrieval (vector + BM25 + graph) for search. Tag-based memory snapshots for persistent AI context across sessions.
 
 ```
 query ─┬─ BGE Embedding ──→ Vector Semantic ──┐
