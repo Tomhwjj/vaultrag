@@ -1,33 +1,44 @@
 ---
 name: vaultrag
-description: VaultRAG — 三路检索融合的本地 RAG 引擎。当用户说"搜一下 XX"、"知识库里有关于 XX 的吗"、"检索 XX"时触发。
+description: VaultRAG — 三路检索融合 + Claude Code 长久记忆。搜索知识库、写记忆快照、蒸馏对话。
 ---
 
-# VaultRAG Skill
+# VaultRAG — 三路检索融合 + 长久记忆
 
-## 用法
-
-搜索 vault:
+## 检索
 
 ```bash
 python -m vaultrag.query "<query>"
 ```
 
-新增笔记后增量入库:
+## 记忆
 
 ```bash
-python -m vaultrag.incremental
+# 查看当前记忆
+python -m vaultrag.memory.load --list
+
+# 加载上下文
+python -m vaultrag.memory.load --full
+
+# 蒸馏对话为记忆
+python -m vaultrag.memory.digest --write --title "..." --summary "..." --conclusion "..." --decisions "..."
 ```
 
-首次或重建:
+## 索引
 
 ```bash
-python -m vaultrag.ingest
+python -m vaultrag.ingest          # 全量（首次）
+python -m vaultrag.incremental      # 增量（日常）
+```
+
+## 维护
+
+```bash
+python -m vaultrag.memory.lifecycle  # 标签升降级
+python -m vaultrag.memory.health     # 健康报告
 ```
 
 ## 前置
-
-确保设置 vault 路径:
 
 ```bash
 export VAULTRAG_VAULT="D:\Agent\Obsidian store"

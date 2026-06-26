@@ -1,7 +1,7 @@
 [project]
 name = "vaultrag"
 version = "1.0.0"
-description = "Vault-native RAG engine — three-way retrieval fusion (vector + BM25 + graph) for Obsidian vaults"
+description = "VaultRAG — 三路检索融合 + Claude Code 长久记忆: 向量+BM25+图谱 RRF → Reranker, 记忆快照跨会话延续"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"

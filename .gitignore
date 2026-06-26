@@ -4,6 +4,7 @@ __pycache__/
 vectordb/
 models/
 docs/
+vault/
 graph_cache.json
 *.egg-info/
 dist/
