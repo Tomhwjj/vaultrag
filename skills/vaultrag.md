@@ -8,8 +8,20 @@ description: VaultRAG — 三路检索融合 + Claude Code 长久记忆。搜索
 ## 检索
 
 ```bash
+# 推荐日常使用 --fast (50ms 极速, RRF融合)
+python -m vaultrag.query "<query>" --fast
+
+# 最高精度 (CrossEncoder精排, ~6s)
 python -m vaultrag.query "<query>"
 ```
+
+查询加速依赖常驻服务 `kb_server`，启动后模型常驻内存 + 评分缓存：
+```bash
+python kb_server.ps1 start          # 启动服务 (首次 ~20s 加载)
+python kb_server.ps1 status         # 查看状态
+python kb_server.ps1 stop           # 停止服务
+```
+query.py 自动检测 server，在线走 HTTP 毫秒查询，离线回退本地加载。
 
 ## 记忆
 
