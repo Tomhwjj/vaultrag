@@ -97,6 +97,21 @@ def check_dedup(title: str, summary: str, tags: list[str]) -> dict | None:
 
     if best_sim > 0.9:
         return {"file": recent[best_idx]["file"], "sim": round(best_sim, 3)}
+
+    # 冲突检测：主题重叠但语义不相似 → 潜在矛盾
+    import jieba.analyse
+    new_topics = set(jieba.analyse.extract_tags(summary + " " + title, topK=5))
+    old_topics = set(jieba.analyse.extract_tags(
+        recent[best_idx]["summary"] + " " + recent[best_idx]["title"], topK=5))
+    overlap = new_topics & old_topics
+    if best_sim > 0 and len(overlap) >= 3 and best_sim < 0.5:
+        return {
+            "conflict": True,
+            "file": recent[best_idx]["file"],
+            "sim": round(best_sim, 3),
+            "overlap_topics": list(overlap),
+        }
+
     return None
 
 

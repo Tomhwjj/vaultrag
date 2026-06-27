@@ -11,7 +11,7 @@ import re
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from ..config import VAULT_DIR
+from config import DOC_DIR as VAULT_DIR
 
 
 def _parse_frontmatter(content: str) -> dict | None:
